@@ -32,7 +32,7 @@ void debug(const char* msg, ...) {
 	}
 }
 
-void print_array(int* array, int size) {
+void print_array(int array[], int size) {
 	printf("Printing Array:\n");
 	for (int i = 0; i < size; ++i) {
 		printf("%d. ", array[i]);
@@ -40,44 +40,145 @@ void print_array(int* array, int size) {
 	printf("\n");
 }
 
-void merge(int* numbers, int begin, int middle, int end, int * sorted) {}
+// VER SE TEM MANEIRA MELHOR DE FAZER ESSE MERGE SÓ COM O PONTEIRO
+/*void merge(int numbers[], int begin, int middle, int end, int sorted[]) {
+	int i, j;
+	i = begin; j = middle;
+	debug("Merging. Begin: %d, Middle: %d, End: %d\n", begin, middle, end);
+	print_array(numbers, end);
+	for (int k = begin; k < end; ++k) {
+		debug("LHS[%d]: %d, RHS[%d]: %d\n", i, numbers[i], j, numbers[j]);
+		if (i < middle && (j >= end || numbers[i] < numbers[j])) {
+			sorted[k] = numbers[i];
+			i++;
+		} else {
+			sorted[k] = numbers[j];
+			j++;
+		}
+	}
+}*/
+void merge (int * a, int size, int * temp) {
+//void merge (int a[], int size, int temp[]) {
+  int i1 = 0;
+  int i2 = size / 2;
+  int tempi = 0;
+
+  while (i1 < size / 2 && i2 < size)
+    {
+      if (a[i1] < a[i2])
+	{
+	  temp[tempi] = a[i1];
+	  i1++;
+	}
+      else
+	{
+	  temp[tempi] = a[i2];
+	  i2++;
+	}
+      tempi++;
+    }
+  while (i1 < size / 2)
+    {
+      temp[tempi] = a[i1];
+      i1++;
+      tempi++;
+    }
+  while (i2 < size)
+    {
+      temp[tempi] = a[i2];
+      i2++;
+      tempi++;
+    }
+  // Copy sorted temp array into main array, a
+	print_array(a, size);
+  memcpy (a, temp, size * sizeof (int));
+}
 
 void recursive_merge_sort(int* tmp, int begin, int end, int* numbers) {
+// void recursive_merge_sort(int tmp[], int begin, int end, int numbers[]) {
 	if (end - begin < 2)
 		return;
 	else {
+		printf("DOIN STUFFFSSSSSSSSSSSSS\n");
 		int middle = (begin + end)/2;
 		recursive_merge_sort(numbers, begin, middle, tmp);
 		recursive_merge_sort(numbers, middle, end, tmp);
-		merge(tmp, begin, middle, end, numbers);
+		//merge(tmp, begin, middle, end, numbers);
+		merge(tmp, end, numbers);
 	}
 }
 
-void mpi_merge_sort(int numbersA[], int size, int temp[],
-			int level, int my_rank, int max_rank,
-int tag, MPI_Comm comm, int threads){
-	int friend_rank = rank + pow(2,etapa); // determs the rank of the process that will help
+void mpi_merge_sort(int* numbers, int size, int* tmp, int step,
+// void mpi_merge_sort(int numbers[], int size, int tmp[], int step,
+										int my_rank, int max_rank, MPI_Comm comm) {
+	int power = pow(2,step);
+	//printf("The step is: %d\n", power);
+	int friend_rank = my_rank + power; // determs the rank of the process that will help
 	if(friend_rank > max_rank){
-		recursive_merge_sort(numbersA, 0, sizeA, tmp);
+		printf("IS SOMEONE HERE?\n");
+		recursive_merge_sort(tmp, 0, size, numbers);
 	} else {
+		//printf("Process %d has helper %d\n", my_rank, friend_rank);
+		// pode ser usado request com Isend para melhor performance
+		MPI_Request request;
 		MPI_Status status;
 
-		MPI_Isend(a+size/2)
+		int* meio = numbers+size/2;										//it was with max_rank
+		MPI_Isend(meio, size-size/2, MPI_INT, friend_rank, step, comm, &request);
+
+		print_array(meio, size-size/2);
+		printf("Process %d, before mpi recusivity\n", my_rank);
+		mpi_merge_sort(numbers, size/2, tmp, step+1, my_rank, max_rank, comm);
+		printf("Process %d, after mpi recusivity\n", my_rank);
+		MPI_Request_free (&request);
+
+		MPI_Recv (meio, size-size/2, MPI_INT, friend_rank, MPI_ANY_TAG, comm, &status);
+		printf("%d RECEIVED\n", my_rank);
+		int middle = (size-1)/2;
+		//merge (numbers, 0, middle, size, tmp);
+		merge (numbers, size, tmp);
 	}
 }
 
-int * merge_sort(int * numbersA, int sizeA, int * numbersB, int sizeB, int * tmp, int max_rank) {
-	//recursive_merge_sort(numbersA, 0, sizeA, tmp);
-	mpi_merge_sort(numbersA, 0, sizeA, tmp, );
-	int size = MPI_Comm_size(MPI_COMM_WORLD, &size) > rank+pow(2,n-1);
+void friend_merge_sort(int my_rank, int max_rank, MPI_Comm comm){
+	MPI_Status status;
+  int size;
+	printf("hey friend %d here\n", my_rank);
+  MPI_Probe (MPI_ANY_SOURCE, MPI_ANY_TAG, comm, &status);
+  MPI_Get_count (&status, MPI_INT, &size);
+	int parent_rank = status.MPI_SOURCE;
+	int step = status.MPI_TAG;
+	int *a = malloc (sizeof (int) * size);
+	int *tmp = malloc (sizeof (int) * size);
+  MPI_Recv (a, size, MPI_INT, parent_rank, MPI_ANY_TAG, comm, &status);
+	mpi_merge_sort(a, size, tmp, step+1, my_rank, max_rank, comm);
+  // Send sorted array to parent process
+	printf("%d is possibly trying to send\n", my_rank);
+  MPI_Send (a, size, MPI_INT, parent_rank, 123, comm);
+	printf("%d SENDED \n", my_rank);
+	free(a);
+	free(tmp);
+	return;
+}
 
-	recursive_merge_sort(numbersB, 0, sizeB, tmp+sizeA);
+int * main_merge_sort(int * numbersA, int sizeA, int* numbersB, int sizeB, int* tmp, int max_rank, MPI_Comm comm) {
+// int * main_merge_sort(int numbersA[], int sizeA, int numbersB[], int sizeB, int tmp[], int max_rank, MPI_Comm comm) {
+	//recursive_merge_sort(numbersA, 0, sizeA, tmp);
+	mpi_merge_sort(numbersA, sizeA, tmp, 0, 0, max_rank, comm);
+	//VOLTAR AQUI NÃO TERMINOU AINDA
+	//recursive_merge_sort(numbersB, 0, sizeB, tmp+sizeA);
+	printf("WARNING!!\n");
+	MPI_Barrier(MPI_COMM_WORLD);
+	mpi_merge_sort(numbersB, sizeB, tmp+sizeA, 0, 0, max_rank, comm);
 	int * result = malloc((sizeA+sizeB)*sizeof(int));
-	merge(tmp, 0, sizeA, sizeA+sizeB, result);
+	// merge(tmp, 0, sizeA, sizeA+sizeB, result);
+
+	merge(tmp, sizeA+sizeB, result);//merge(tmp, sizeA+sizeB, result);
 	return result;
 }
 
 void populate_array(int* array, int size, int max) {
+// void populate_array(int array[], int size, int max) {
 	int m = max+1;
 	for (int i = 0; i < size; ++i) {
 		array[i] = rand()%m;
@@ -192,9 +293,8 @@ int main (int argc, char ** argv) {
 		print_array(sortable1, arr_size1);
 		print_array(sortable2, arr_size2);
 
-		MPI_Send(void* buf, int count, MPI_INT, int dest, int tag, MPI_Commcomm);
-
-		int * result = merge_sort(sortable1, arr_size1,sortable2, arr_size2, tmp, size-1);
+		//MPI_Send(void* buf, int count, MPI_INT, int dest, int tag, MPI_Commcomm);
+		int * result = main_merge_sort(sortable1, arr_size1,sortable2, arr_size2, tmp, size-1, MPI_COMM_WORLD);
 		print_array(result, (arr_size1+arr_size2));
 
 		free(sortable1);
@@ -202,7 +302,10 @@ int main (int argc, char ** argv) {
 		free(tmp);
 		free(result);
 	} else {
-
+		friend_merge_sort(rank, size -1, MPI_COMM_WORLD);
+		MPI_Barrier(MPI_COMM_WORLD);
+		printf("WARNING2\n");
+		friend_merge_sort(rank, size - 1, MPI_COMM_WORLD); //para o segundo array (verificar se esta correto)
 	}
 
 	MPI_Finalize();
