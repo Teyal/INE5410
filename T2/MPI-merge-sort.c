@@ -23,9 +23,6 @@
 #define MAXVAL 255
 #endif // MAX_VAL
 
-/*
- * More info on: http://en.cppreference.com/w/c/language/variadic
- */
 void debug(const char* msg, ...) {
 	if (DEBUG > 2) {
 		va_list args;
@@ -43,31 +40,8 @@ void print_array(int* array, int size) {
 	printf("\n");
 }
 
-/*
- * Orderly merges two int arrays (numbers[begin..middle] and numbers[middle..end]) into one (sorted).
- * \retval: merged array -> sorted
- */
-void merge(int* numbers, int begin, int middle, int end, int * sorted) {
-	int i, j;
-	i = begin; j = middle;
-	debug("Merging. Begin: %d, Middle: %d, End: %d\n", begin, middle, end);
-	print_array(numbers, end);
-	for (int k = begin; k < end; ++k) {
-		debug("LHS[%d]: %d, RHS[%d]: %d\n", i, numbers[i], j, numbers[j]);
-		if (i < middle && (j >= end || numbers[i] < numbers[j])) {
-			sorted[k] = numbers[i];
-			i++;
-		} else {
-			sorted[k] = numbers[j];
-			j++;
-		}
-	}
-}
+void merge(int* numbers, int begin, int middle, int end, int * sorted) {}
 
-
-/*
- * Merge sort recursive step
- */
 void recursive_merge_sort(int* tmp, int begin, int end, int* numbers) {
 	if (end - begin < 2)
 		return;
@@ -79,21 +53,29 @@ void recursive_merge_sort(int* tmp, int begin, int end, int* numbers) {
 	}
 }
 
-// First Merge Sort call
-/*
-void merge_sort(int * numbers, int size, int * tmp) {
-	recursive_merge_sort(numbers, 0, size, tmp);
+void mpi_merge_sort(int numbersA[], int size, int temp[],
+			int level, int my_rank, int max_rank,
+int tag, MPI_Comm comm, int threads){
+	int friend_rank = rank + pow(2,etapa); // determs the rank of the process that will help
+	if(friend_rank > max_rank){
+		recursive_merge_sort(numbersA, 0, sizeA, tmp);
+	} else {
+		MPI_Status status;
+
+		MPI_Isend(a+size/2)
+	}
 }
-*/
-int * merge_sort(int * numbersA, int sizeA, int * numbersB, int sizeB, int * tmp) {
-	recursive_merge_sort(numbersA, 0, sizeA, tmp);
+
+int * merge_sort(int * numbersA, int sizeA, int * numbersB, int sizeB, int * tmp, int max_rank) {
+	//recursive_merge_sort(numbersA, 0, sizeA, tmp);
+	mpi_merge_sort(numbersA, 0, sizeA, tmp, );
+	int size = MPI_Comm_size(MPI_COMM_WORLD, &size) > rank+pow(2,n-1);
+
 	recursive_merge_sort(numbersB, 0, sizeB, tmp+sizeA);
 	int * result = malloc((sizeA+sizeB)*sizeof(int));
 	merge(tmp, 0, sizeA, sizeA+sizeB, result);
 	return result;
 }
-
-
 
 void populate_array(int* array, int size, int max) {
 	int m = max+1;
@@ -108,7 +90,7 @@ int main (int argc, char ** argv) {
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-	if(rank==0){
+	if (rank==0){
 		int seed, max_val;
 		int * sortable1, * sortable2;
 		int * tmp ;
@@ -209,7 +191,10 @@ int main (int argc, char ** argv) {
 
 		print_array(sortable1, arr_size1);
 		print_array(sortable2, arr_size2);
-		int * result = merge_sort(sortable1, arr_size1,sortable2, arr_size2, tmp);
+
+		MPI_Send(void* buf, int count, MPI_INT, int dest, int tag, MPI_Commcomm);
+
+		int * result = merge_sort(sortable1, arr_size1,sortable2, arr_size2, tmp, size-1);
 		print_array(result, (arr_size1+arr_size2));
 
 		free(sortable1);
